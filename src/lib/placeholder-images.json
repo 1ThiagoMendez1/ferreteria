@@ -1,0 +1,52 @@
+{
+  "placeholderImages": [
+    {
+      "id": "dewalt-drill",
+      "description": "A powerful DeWalt cordless drill on a workbench.",
+      "imageUrl": "https://picsum.photos/seed/dewaltdrill/600/400",
+      "imageHint": "power drill"
+    },
+    {
+      "id": "milwaukee-saw",
+      "description": "A red Milwaukee circular saw cutting through a piece of wood.",
+      "imageUrl": "https://picsum.photos/seed/circularsaw/600/400",
+      "imageHint": "circular saw"
+    },
+    {
+      "id": "pvc-pipe",
+      "description": "A stack of white PVC pipes.",
+      "imageUrl": "https://picsum.photos/seed/pvcpipe/600/400",
+      "imageHint": "pvc pipes"
+    },
+    {
+      "id": "kitchen-faucet",
+      "description": "A modern chrome kitchen faucet over a sink.",
+      "imageUrl": "https://picsum.photos/seed/kitchenfaucet/600/400",
+      "imageHint": "kitchen faucet"
+    },
+    {
+      "id": "light-switch",
+      "description": "A clean white modern light switch on a wall.",
+      "imageUrl": "https://picsum.photos/seed/lightswitch/600/400",
+      "imageHint": "light switch"
+    },
+    {
+      "id": "paint-can",
+      "description": "An open can of paint with a brush resting on it.",
+      "imageUrl": "https://picsum.photos/seed/paintcan/600/400",
+      "imageHint": "paint can"
+    },
+    {
+      "id": "concrete-bag",
+      "description": "A bag of concrete mix on a pallet.",
+      "imageUrl": "https://picsum.photos/seed/concretebag/600/400",
+      "imageHint": "concrete mix"
+    },
+    {
+      "id": "hero-image",
+      "description": "A well-organized and brightly lit hardware store aisle.",
+      "imageUrl": "https://picsum.photos/seed/hardwareaisle/1200/600",
+      "imageHint": "hardware store"
+    }
+  ]
+}
