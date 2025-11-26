@@ -1,13 +1,24 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { Toaster as SonnerToaster } from 'sonner';
 import { CartProvider } from '@/hooks/use-cart';
 import Preloader from '@/components/preloader';
+import { SessionProvider } from '@/components/session-provider';
 
 export const metadata: Metadata = {
   title: 'TresEtapas',
   description:
     'El sistema completo de soluciones para tu ferretería, con un sitio web y un sitio para administrar productos.',
+  icons: {
+    icon: [
+      { url: '/uploads/logo.png', sizes: '32x32', type: 'image/png' },
+      { url: '/uploads/logo.png', sizes: '64x64', type: 'image/png' },
+      { url: '/uploads/logo.png', rel: 'shortcut icon' },
+    ],
+    shortcut: '/uploads/logo.png',
+    apple: '/uploads/logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -27,10 +38,13 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased min-h-screen">
         <Preloader />
-        <CartProvider>
-          {children}
-          <Toaster />
-        </CartProvider>
+        <SessionProvider>
+          <CartProvider>
+            {children}
+            <Toaster />
+            <SonnerToaster />
+          </CartProvider>
+        </SessionProvider>
       </body>
     </html>
   );

@@ -5,7 +5,39 @@ const prisma = new PrismaClient();
 // Función auxiliar para obtener URLs de imágenes (removida ya que no se crean productos simulados)
 
 async function main() {
-  console.log('🌱 Starting database seed... (solo categorías y ubicaciones base)');
+  console.log('🌱 Starting database seed...');
+
+  // Create roles
+  const roles = [
+    { name: 'admin' },
+    { name: 'seller' },
+  ];
+
+  for (const role of roles) {
+    await prisma.role.upsert({
+      where: { name: role.name },
+      update: {},
+      create: role,
+    });
+  }
+
+  // Create permissions
+  const permissions = [
+    { name: 'dashboard' },
+    { name: 'products' },
+    { name: 'orders' },
+    { name: 'sales' },
+    { name: 'consultations' },
+    { name: 'users' },
+  ];
+
+  for (const permission of permissions) {
+    await prisma.permission.upsert({
+      where: { name: permission.name },
+      update: {},
+      create: permission,
+    });
+  }
 
   // Create categories
   const categories = [

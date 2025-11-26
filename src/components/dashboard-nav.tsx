@@ -3,22 +3,25 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Package, Home, icons, ShoppingCart, Handshake, DollarSign } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { Package, Home, icons, ShoppingCart, Handshake, DollarSign, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from './ui/button';
 import { Badge } from './ui/badge';
 import { createElement } from 'react';
 
-const navLinks = [
-  { href: '/dashboard', label: 'Panel de Control', icon: 'Home' },
-  { href: '/dashboard/products', label: 'Productos', icon: 'Package' },
-  { href: '/dashboard/orders', label: 'Pedidos', icon: 'ShoppingCart', showBadge: true },
-  { href: '/dashboard/sales', label: 'Ventas en Tienda', icon: 'DollarSign' },
-  { href: '/dashboard/consultations', label: 'Asesorías', icon: 'Handshake' },
+const allNavLinks = [
+  { href: '/dashboard', label: 'Panel de Control', icon: 'Home', permission: 'dashboard' },
+  { href: '/dashboard/products', label: 'Productos', icon: 'Package', permission: 'products' },
+  { href: '/dashboard/orders', label: 'Pedidos', icon: 'ShoppingCart', permission: 'orders', showBadge: true },
+  { href: '/dashboard/sales', label: 'Ventas en Tienda', icon: 'DollarSign', permission: 'sales' },
+  { href: '/dashboard/consultations', label: 'Asesorías', icon: 'Handshake', permission: 'consultations' },
+  { href: '/dashboard/users', label: 'Usuarios', icon: 'Users', permission: 'users' },
 ];
 
 export default function DashboardNav() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
 
   useEffect(() => {
@@ -39,6 +42,13 @@ export default function DashboardNav() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Filter nav links based on user permissions
+  const navLinks = allNavLinks.filter(link => {
+    if (!session?.user) return false;
+    if (session.user.role === 'admin') return true; // Admins see all
+    return session.user.permissions.includes(link.permission);
+  });
 
   return (
     <nav className="grid items-start px-2 text-sm font-medium lg:px-4">

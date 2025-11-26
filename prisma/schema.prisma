@@ -25,10 +25,14 @@ model Product {
   imageHint   String
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+  createdById String?
+  updatedById String?
 
   category    Category   @relation(fields: [categoryId], references: [id])
   location    Location   @relation(fields: [locationId], references: [id])
   orderItems  OrderItem[]
+  createdBy   User?      @relation("ProductCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?      @relation("ProductUpdatedBy", fields: [updatedById], references: [id])
 
   @@map("products")
 }
@@ -57,19 +61,23 @@ model Location {
 }
 
 model Order {
-  id            String      @id @default(cuid())
-  orderCode     String      @unique @default("")
-  date          DateTime    @default(now())
-  status        OrderStatus
-  total         Int
-  paymentMethod PaymentMethod
-  customerName  String?
+  id              String      @id @default(cuid())
+  orderCode       String      @unique @default("")
+  date            DateTime    @default(now())
+  status          OrderStatus
+  total           Int
+  paymentMethod   PaymentMethod
+  customerName    String?
   customerAddress String?
-  customerPhone String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  customerPhone   String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  createdById     String?
+  updatedById     String?
 
-  items         OrderItem[]
+  items           OrderItem[]
+  createdBy       User?       @relation("OrderCreatedBy", fields: [createdById], references: [id])
+  updatedBy       User?       @relation("OrderUpdatedBy", fields: [updatedById], references: [id])
 
   @@map("orders")
 }
@@ -87,15 +95,20 @@ model OrderItem {
 }
 
 model Consultation {
-  id        String             @id @default(cuid())
-  date      DateTime           @default(now())
-  name      String
-  email     String
-  phone     String
-  diagnosis String?
-  status    ConsultationStatus @default(PENDING)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  id          String             @id @default(cuid())
+  date        DateTime           @default(now())
+  name        String
+  email       String
+  phone       String
+  diagnosis   String?
+  status      ConsultationStatus @default(PENDING)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  createdById String?
+  updatedById String?
+
+  createdBy   User?              @relation("ConsultationCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?              @relation("ConsultationUpdatedBy", fields: [updatedById], references: [id])
 
   @@map("consultations")
 }
@@ -123,4 +136,61 @@ enum ConsultationStatus {
 enum ImageType {
   URL
   FILE
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  name        String
+  roleId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  role        Role     @relation(fields: [roleId], references: [id])
+  permissions UserPermission[]
+
+  // Auditoría: relaciones inversas para tracking de quién creó/actualizó
+  productsCreated       Product[]      @relation("ProductCreatedBy")
+  productsUpdated       Product[]      @relation("ProductUpdatedBy")
+  ordersCreated         Order[]        @relation("OrderCreatedBy")
+  ordersUpdated         Order[]        @relation("OrderUpdatedBy")
+  consultationsCreated  Consultation[] @relation("ConsultationCreatedBy")
+  consultationsUpdated  Consultation[] @relation("ConsultationUpdatedBy")
+
+  @@map("users")
+}
+
+model Role {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     UserPermission[]
+
+  @@map("permissions")
+}
+
+model UserPermission {
+  id           String @id @default(cuid())
+  userId       String
+  permissionId String
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
 }

@@ -3,8 +3,10 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { addProduct, updateProduct, deleteProduct as deleteProductFromDb, addOrder, addConsultation, updateOrderStatus } from './data';
+import { getServerSession } from 'next-auth';
+import { addProduct, updateProduct, deleteProduct as deleteProductFromDb, addOrder, addConsultation, updateOrderStatus, addCategory } from './data';
 import type { Product, CartItem } from './types';
+import { authOptions } from './auth';
 
 const ProductSchema = z.object({
   id: z.string().optional(),
@@ -43,6 +45,28 @@ export type FormState = {
   errors?: Record<string, string[] | undefined>;
 };
 
+/**
+ * Acción sencilla para crear categorías desde el dashboard de productos.
+ */
+export async function createCategoryAction(formData: FormData) {
+  const name = String(formData.get('name') ?? '').trim();
+  const icon = String(formData.get('icon') ?? '').trim();
+
+  if (!name || !icon) {
+    console.error('Nombre o icono de categoría vacíos');
+    return;
+  }
+
+  try {
+    await addCategory(name, icon);
+  } catch (error) {
+    console.error('Error creating category:', error);
+    return;
+  }
+
+  revalidatePath('/dashboard/products');
+}
+
 export async function saveProduct(prevState: FormState, formData: FormData): Promise<FormState> {
   const rawData = Object.fromEntries(formData.entries());
   console.log('Raw form data:', rawData);
@@ -61,14 +85,17 @@ export async function saveProduct(prevState: FormState, formData: FormData): Pro
   console.log('Validated data:', data);
 
   try {
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
     if (data.id) {
       // Update existing product
       console.log('Updating product:', data.id);
-      await updateProduct(data.id, data as Partial<Product>);
+      await updateProduct(data.id, data as Partial<Product>, userId);
     } else {
       // Create new product
       console.log('Creating new product');
-      await addProduct(data as Omit<Product, 'id'>);
+      await addProduct(data as Omit<Product, 'id'>, userId);
     }
     console.log('Product saved successfully');
   } catch (e) {
@@ -124,12 +151,18 @@ export async function createOrderAction(data: { [key: string]: any }) {
     try {
         const parsedItems: CartItem[] = JSON.parse(items);
 
-        const newOrder = await addOrder({
+        const session = await getServerSession(authOptions);
+        const userId = session?.user?.id;
+
+        const newOrder = await addOrder(
+          {
             items: parsedItems,
             total,
             paymentMethod,
-            customer: { fullName, address, phone }
-        });
+            customer: { fullName, address, phone },
+          },
+          userId,
+        );
 
         revalidatePath('/dashboard/orders');
         return { success: true, orderId: newOrder.id, orderCode: newOrder.orderCode };
@@ -155,7 +188,10 @@ export async function createConsultationAction(data: { [key: string]: any }) {
   }
 
   try {
-      const newConsultation = await addConsultation(validatedFields.data);
+      const session = await getServerSession(authOptions);
+      const userId = session?.user?.id;
+
+      const newConsultation = await addConsultation(validatedFields.data, userId);
       revalidatePath('/dashboard/consultations');
       return { success: true, consultation: newConsultation };
   } catch (error) {
@@ -166,7 +202,10 @@ export async function createConsultationAction(data: { [key: string]: any }) {
 
 export async function updateOrderStatusAction(orderId: string, status: 'solicitado' | 'en-proceso' | 'entregado') {
   try {
-    const updatedOrder = await updateOrderStatus(orderId, status);
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
+    const updatedOrder = await updateOrderStatus(orderId, status, userId);
     if (!updatedOrder) {
       return { success: false, error: 'No se pudo actualizar el estado del pedido.' };
     }
@@ -207,12 +246,18 @@ export async function createManualSaleAction(data: { [key: string]: any }) {
   try {
     const parsedItems: CartItem[] = JSON.parse(items);
 
-    const newOrder = await addOrder({
-      items: parsedItems,
-      total,
-      paymentMethod,
-      customer: { fullName: customerName, address: customerAddress, phone: customerPhone }
-    });
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
+    const newOrder = await addOrder(
+      {
+        items: parsedItems,
+        total,
+        paymentMethod,
+        customer: { fullName: customerName, address: customerAddress, phone: customerPhone },
+      },
+      userId,
+    );
 
     revalidatePath('/dashboard/orders');
     revalidatePath('/dashboard/sales');

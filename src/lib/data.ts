@@ -149,6 +149,26 @@ export async function getCategories() {
   }
 }
 
+/**
+ * Crea una nueva categoría sencilla (nombre + icono).
+ * El id se genera automáticamente (cuid).
+ */
+export async function addCategory(name: string, icon: string) {
+  try {
+    const category = await prisma.category.create({
+      data: {
+        name,
+        icon,
+      },
+    });
+
+    return category;
+  } catch (error) {
+    console.error('Error adding category:', error);
+    throw error;
+  }
+}
+
 export async function getLocations() {
   try {
     const locations = await prisma.location.findMany({
@@ -164,6 +184,25 @@ export async function getLocations() {
   } catch (error) {
     console.error('Error fetching locations:', error);
     return [];
+  }
+}
+
+/**
+ * Crea una nueva ubicación sencilla (solo nombre).
+ * El id se genera automáticamente (cuid).
+ */
+export async function addLocation(name: string) {
+  try {
+    const location = await prisma.location.create({
+      data: {
+        name,
+      },
+    });
+
+    return location;
+  } catch (error) {
+    console.error('Error adding location:', error);
+    throw error;
   }
 }
 
@@ -277,7 +316,7 @@ export async function getConsultations() {
 
 // --- Data Mutation Functions (for server actions) ---
 
-export async function addProduct(product: Omit<Product, 'id'>) {
+export async function addProduct(product: Omit<Product, 'id'>, userId?: string) {
   try {
     const newProduct = await prisma.product.create({
       data: {
@@ -291,13 +330,15 @@ export async function addProduct(product: Omit<Product, 'id'>) {
         imageType: product.imageType,
         imageUrl: product.imageUrl,
         imageFile: product.imageFile,
-        imageHint: product.imageHint || "product"
-      },
+        imageHint: product.imageHint || 'product',
+        createdById: userId || null,
+        updatedById: userId || null,
+      } as any,
       include: {
         category: true,
-        location: true
-      }
-    });
+        location: true,
+      },
+    }) as any;
 
     return {
       id: newProduct.id,
@@ -306,12 +347,12 @@ export async function addProduct(product: Omit<Product, 'id'>) {
       price: newProduct.price,
       quantity: newProduct.quantity,
       minStock: newProduct.minStock,
-      category: newProduct.category.id,
-      location: newProduct.location.id,
+      category: newProduct.category?.id ?? product.category,
+      location: newProduct.location?.id ?? product.location,
       imageType: newProduct.imageType,
       imageUrl: newProduct.imageUrl,
       imageFile: newProduct.imageFile,
-      imageHint: newProduct.imageHint
+      imageHint: newProduct.imageHint,
     };
   } catch (error) {
     console.error('Error adding product:', error);
@@ -319,7 +360,7 @@ export async function addProduct(product: Omit<Product, 'id'>) {
   }
 }
 
-export async function updateProduct(id: string, productUpdate: Partial<Product>) {
+export async function updateProduct(id: string, productUpdate: Partial<Product>, userId?: string) {
   try {
     const updateData: any = {};
 
@@ -334,14 +375,15 @@ export async function updateProduct(id: string, productUpdate: Partial<Product>)
     if (productUpdate.imageUrl !== undefined) updateData.imageUrl = productUpdate.imageUrl;
     if (productUpdate.imageFile !== undefined) updateData.imageFile = productUpdate.imageFile;
     if (productUpdate.imageHint) updateData.imageHint = productUpdate.imageHint;
+    if (userId) updateData.updatedById = userId;
 
     const updatedProduct = await prisma.product.update({
       where: { id },
       data: updateData,
       include: {
         category: true,
-        location: true
-      }
+        location: true,
+      },
     });
 
     return {
@@ -356,7 +398,7 @@ export async function updateProduct(id: string, productUpdate: Partial<Product>)
       imageType: updatedProduct.imageType,
       imageUrl: updatedProduct.imageUrl,
       imageFile: updatedProduct.imageFile,
-      imageHint: updatedProduct.imageHint
+      imageHint: updatedProduct.imageHint,
     };
   } catch (error) {
     console.error('Error updating product:', error);
@@ -387,12 +429,12 @@ type NewOrderData = {
   };
 }
 
-export async function addOrder(orderData: NewOrderData) {
+export async function addOrder(orderData: NewOrderData, userId?: string) {
   try {
     // Generate unique order code
     const orderCode = await generateOrderCode();
 
-    const order = await prisma.order.create({
+    const order = (await prisma.order.create({
       data: {
         orderCode,
         status: 'SOLICITADO',
@@ -401,21 +443,23 @@ export async function addOrder(orderData: NewOrderData) {
         customerName: orderData.customer.fullName,
         customerAddress: orderData.customer.address,
         customerPhone: orderData.customer.phone,
+        createdById: userId || null,
+        updatedById: userId || null,
         items: {
-          create: orderData.items.map(item => ({
+          create: orderData.items.map((item) => ({
             quantity: item.quantity,
-            productId: item.product.id
-          }))
-        }
-      },
+            productId: item.product.id,
+          })),
+        },
+      } as any,
       include: {
         items: {
           include: {
-            product: true
-          }
-        }
-      }
-    });
+            product: true,
+          },
+        },
+      },
+    })) as any;
 
     // Update product quantities
     for (const item of orderData.items) {
@@ -423,25 +467,28 @@ export async function addOrder(orderData: NewOrderData) {
         where: { id: item.product.id },
         data: {
           quantity: {
-            decrement: item.quantity
-          }
-        }
+            decrement: item.quantity,
+          },
+        },
       });
     }
+
+    const statusKey = order.status as keyof typeof ORDER_STATUS_REVERSE_MAP;
+    const paymentKey = order.paymentMethod as keyof typeof PAYMENT_METHOD_REVERSE_MAP;
 
     return {
       id: order.id,
       orderCode: order.orderCode,
       date: order.date.toISOString(),
-      status: ORDER_STATUS_REVERSE_MAP[order.status],
+      status: ORDER_STATUS_REVERSE_MAP[statusKey],
       total: order.total,
-      paymentMethod: PAYMENT_METHOD_REVERSE_MAP[order.paymentMethod],
+      paymentMethod: PAYMENT_METHOD_REVERSE_MAP[paymentKey],
       customer: {
         fullName: order.customerName || undefined,
         address: order.customerAddress || undefined,
-        phone: order.customerPhone || undefined
+        phone: order.customerPhone || undefined,
       },
-      items: order.items.map(item => ({
+      items: (order.items || []).map((item: any) => ({
         product: {
           id: item.product.id,
           name: item.product.name,
@@ -452,10 +499,10 @@ export async function addOrder(orderData: NewOrderData) {
           category: item.product.categoryId,
           location: item.product.locationId,
           imageUrl: item.product.imageUrl,
-          imageHint: item.product.imageHint
+          imageHint: item.product.imageHint,
         },
-        quantity: item.quantity
-      }))
+        quantity: item.quantity,
+      })),
     };
   } catch (error) {
     console.error('Error adding order:', error);
@@ -463,20 +510,25 @@ export async function addOrder(orderData: NewOrderData) {
   }
 }
 
-export async function updateOrderStatus(id: string, status: OrderStatus) {
+export async function updateOrderStatus(id: string, status: OrderStatus, userId?: string) {
   try {
+    const data: any = {
+      status: ORDER_STATUS_MAP[status],
+    };
+    if (userId) {
+      data.updatedById = userId;
+    }
+
     const updatedOrder = await prisma.order.update({
       where: { id },
-      data: {
-        status: ORDER_STATUS_MAP[status]
-      },
+      data,
       include: {
         items: {
           include: {
-            product: true
-          }
-        }
-      }
+            product: true,
+          },
+        },
+      },
     });
 
     return {
@@ -489,9 +541,9 @@ export async function updateOrderStatus(id: string, status: OrderStatus) {
       customer: {
         fullName: updatedOrder.customerName || undefined,
         address: updatedOrder.customerAddress || undefined,
-        phone: updatedOrder.customerPhone || undefined
+        phone: updatedOrder.customerPhone || undefined,
       },
-      items: updatedOrder.items.map(item => ({
+      items: updatedOrder.items.map((item) => ({
         product: {
           id: item.product.id,
           name: item.product.name,
@@ -502,10 +554,10 @@ export async function updateOrderStatus(id: string, status: OrderStatus) {
           category: item.product.categoryId,
           location: item.product.locationId,
           imageUrl: item.product.imageUrl,
-          imageHint: item.product.imageHint
+          imageHint: item.product.imageHint,
         },
-        quantity: item.quantity
-      }))
+        quantity: item.quantity,
+      })),
     };
   } catch (error) {
     console.error('Error updating order status:', error);
@@ -520,16 +572,18 @@ type NewConsultationData = {
   diagnosis?: string;
 }
 
-export async function addConsultation(consultationData: NewConsultationData) {
+export async function addConsultation(consultationData: NewConsultationData, userId?: string) {
   try {
-    const consultation = await prisma.consultation.create({
+    const consultation = (await prisma.consultation.create({
       data: {
         name: consultationData.name,
         email: consultationData.email,
         phone: consultationData.phone,
-        diagnosis: consultationData.diagnosis
-      }
-    });
+        diagnosis: consultationData.diagnosis,
+        createdById: userId || null,
+        updatedById: userId || null,
+      } as any,
+    })) as any;
 
     return {
       id: consultation.id,
@@ -538,7 +592,7 @@ export async function addConsultation(consultationData: NewConsultationData) {
       email: consultation.email,
       phone: consultation.phone,
       diagnosis: consultation.diagnosis,
-      status: consultation.status.toLowerCase() as 'pending' | 'contacted'
+      status: consultation.status.toLowerCase() as 'pending' | 'contacted',
     };
   } catch (error) {
     console.error('Error adding consultation:', error);
