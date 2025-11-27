@@ -363,6 +363,8 @@ function getPermissionDisplayName(permissionName: string): string {
     orders: 'Pedidos',
     sales: 'Ventas en Tienda',
     consultations: 'Asesorías',
+    warehouse: 'Almacén',
+    accounting: 'Contabilidad',
     users: 'Gestión de Usuarios',
   };
 

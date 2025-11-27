@@ -6,7 +6,12 @@ export type Product = {
   id: string;
   name: string;
   description: string;
+  /** Precio final de venta (con ganancia incluida) */
   price: number;
+  /** Costo base del producto (antes de aplicar porcentaje). Opcional para productos antiguos. */
+  basePrice?: number;
+  /** Porcentaje de ganancia aplicado (0.3 = 30%). Opcional para productos antiguos. */
+  marginPct?: number;
   quantity: number;
   minStock: number;
   category: string;

@@ -12,7 +12,11 @@ const ProductSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(3, 'El nombre debe tener al menos 3 caracteres.'),
   description: z.string().min(10, 'La descripción debe tener al menos 10 caracteres.'),
+  // price es el precio final calculado (con ganancia incluida)
   price: z.coerce.number().positive('El precio debe ser un número positivo.'),
+  // campos adicionales para contabilidad
+  basePrice: z.coerce.number().optional(),
+  marginPct: z.coerce.number().optional(),
   quantity: z.coerce.number().int().nonnegative('La cantidad debe ser un número entero.'),
   minStock: z.coerce.number().int().nonnegative('El stock mínimo debe ser un número entero.'),
   category: z.string().min(1, 'Por favor seleccione una categoría.'),

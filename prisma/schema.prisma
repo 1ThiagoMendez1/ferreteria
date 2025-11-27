@@ -14,7 +14,12 @@ model Product {
   id          String     @id @default(cuid())
   name        String
   description String
+  /// Precio final de venta (con ganancia incluida)
   price       Int
+  /// Costo base del producto (antes de aplicar porcentaje)
+  basePrice   Int?
+  /// Porcentaje de ganancia aplicado al producto (0.3 = 30%)
+  marginPct   Float?
   quantity    Int
   minStock    Int
   categoryId  String
@@ -87,6 +92,13 @@ model OrderItem {
   quantity  Int
   orderId   String
   productId String
+
+  /// Precio de venta por unidad en el momento de la venta
+  unitPrice Int
+  /// Costo base por unidad en el momento de la venta
+  unitBase  Int?
+  /// Porcentaje de ganancia aplicado en la venta (0.3 = 30%)
+  unitMargin Float?
 
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])

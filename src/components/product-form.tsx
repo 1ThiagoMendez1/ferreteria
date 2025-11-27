@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Save, Upload, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
@@ -37,37 +37,49 @@ type ProductFormProps = {
   locations: Location[];
 };
 
-const ProductFormSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1, 'El nombre es requerido'),
-  category: z.string().min(1, 'La categoría es requerida'),
-  location: z.string().min(1, 'La ubicación es requerida'),
-  price: z.coerce.number().positive('El precio debe ser positivo'),
-  quantity: z.coerce.number().int().nonnegative('La cantidad no puede ser negativa'),
-  minStock: z.coerce.number().int().nonnegative('El stock mín. no puede ser negativo'),
-  description: z.string().min(1, 'La descripción es requerida'),
-  imageType: z.enum(['URL', 'FILE']).optional(),
-  imageUrl: z.string().optional(),
-  imageFile: z.string().optional(),
-}).refine(data => {
-  // Validate based on image type
-  if (data.imageType === 'URL' && data.imageUrl) {
-    try {
-      new URL(data.imageUrl);
-      return true;
-    } catch {
-      return false;
+const ProductFormSchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().min(1, 'El nombre es requerido'),
+    category: z.string().min(1, 'La categoría es requerida'),
+    location: z.string().min(1, 'La ubicación es requerida'),
+    // basePrice = costo del producto
+    basePrice: z.coerce.number().positive('El costo debe ser positivo'),
+    quantity: z
+      .coerce.number()
+      .int()
+      .nonnegative('La cantidad no puede ser negativa'),
+    minStock: z
+      .coerce.number()
+      .int()
+      .nonnegative('El stock mín. no puede ser negativo'),
+    description: z.string().min(1, 'La descripción es requerida'),
+    imageType: z.enum(['URL', 'FILE']).optional(),
+    imageUrl: z.string().optional(),
+    imageFile: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // Validate based on image type
+      if (data.imageType === 'URL' && data.imageUrl) {
+        try {
+          new URL(data.imageUrl);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      if (data.imageType === 'FILE' && data.imageFile) {
+        return data.imageFile.startsWith('/uploads/');
+      }
+      // Allow no image
+      return !data.imageType || (!data.imageUrl && !data.imageFile);
+    },
+    {
+      message: 'Imagen inválida',
+      path: ['imageUrl'],
     }
-  }
-  if (data.imageType === 'FILE' && data.imageFile) {
-    return data.imageFile.startsWith('/uploads/');
-  }
-  // Allow no image
-  return !data.imageType || (!data.imageUrl && !data.imageFile);
-}, {
-  message: 'Imagen inválida',
-  path: ['imageUrl'],
-});
+  );
 
 type ProductFormData = z.infer<typeof ProductFormSchema>;
 
@@ -81,8 +93,11 @@ export default function ProductForm({
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(
-    product?.imageType === 'FILE' && product?.imageFile ? product.imageFile :
-    product?.imageType === 'URL' && product?.imageUrl ? product.imageUrl : null
+    product?.imageType === 'FILE' && product?.imageFile
+      ? product.imageFile
+      : product?.imageType === 'URL' && product?.imageUrl
+      ? product.imageUrl
+      : null
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -100,9 +115,10 @@ export default function ProductForm({
       name: product?.name ?? '',
       category: product?.category ?? '',
       location: product?.location ?? '',
-      price: product?.price ?? 0,
-      quantity: product?.quantity ?? 0,
-      minStock: product?.minStock ?? 0,
+      // Para productos existentes, si hay basePrice úsalo; si no, usar price como aproximación de costo
+      basePrice: ((product?.basePrice ?? product?.price) as any),
+      quantity: (product?.quantity as any),
+      minStock: (product?.minStock as any),
       description: product?.description ?? '',
       imageType: product?.imageType,
       imageUrl: product?.imageUrl ?? '',
@@ -110,7 +126,27 @@ export default function ProductForm({
     },
   });
 
+  // Estados locales para el cálculo de ganancia
+  const [profitPercentage, setProfitPercentage] = useState<string>('');
+ 
   const watchedImageUrl = watch('imageUrl');
+  const watchedBasePrice = watch('basePrice');
+ 
+  // Cálculo en tiempo real del precio final según la fórmula:
+  // precioFinal = precioBase / (1 - porcentaje/100)
+  const finalPricePreview = (() => {
+    const base = Number(watchedBasePrice);
+    const pct = Number(profitPercentage.replace(',', '.'));
+
+    if (!base || Number.isNaN(base) || base <= 0) return null;
+    if (Number.isNaN(pct) || pct <= 0 || pct >= 100) return null;
+
+    const margin = pct / 100;
+    const final = base / (1 - margin);
+    if (!Number.isFinite(final) || final <= 0) return null;
+
+    return Math.round(final);
+  })();
 
   // Update image preview when imageUrl changes
   useEffect(() => {
@@ -217,15 +253,62 @@ export default function ProductForm({
 
   const processForm = async (data: ProductFormData) => {
     setIsSubmitting(true);
-
+ 
     try {
+      // Calculamos costo (basePrice), margen (marginPct) y precio final (price)
+      const rawBase = Number(data.basePrice);
+      if (Number.isNaN(rawBase) || rawBase <= 0) {
+        throw new Error('Costo inválido');
+      }
+ 
+      let basePrice = rawBase;
+      let marginDecimal: number | undefined;
+      let finalPrice: number;
+ 
+      const trimmedPct = profitPercentage.trim();
+      const existingMargin =
+        typeof product?.marginPct === 'number' && product.marginPct > 0
+          ? product.marginPct
+          : undefined;
+ 
+      if (trimmedPct) {
+        // Usuario indicó un nuevo porcentaje de ganancia
+        const pctNumber = Number(trimmedPct.replace(',', '.'));
+        if (!Number.isNaN(pctNumber) && pctNumber > 0 && pctNumber < 100) {
+          marginDecimal = pctNumber / 100;
+          finalPrice = basePrice / (1 - marginDecimal);
+        } else {
+          marginDecimal = undefined;
+          finalPrice = basePrice;
+        }
+      } else if (product && existingMargin) {
+        // Editando producto: sin nuevo porcentaje, conservar margen existente
+        marginDecimal = existingMargin;
+        finalPrice = basePrice / (1 - marginDecimal);
+      } else {
+        // Producto nuevo sin porcentaje: vender al costo (sin ganancia)
+        marginDecimal = undefined;
+        finalPrice = basePrice;
+      }
+ 
+      // Redondeamos al entero más cercano para el precio de venta
+      const roundedFinalPrice = Math.max(1, Math.round(finalPrice));
+ 
       const formData = new FormData();
-
+ 
       // Add basic fields
       if (data.id) formData.append('id', data.id);
       formData.append('name', data.name);
       formData.append('description', data.description);
-      formData.append('price', String(data.price));
+      // Enviamos al backend:
+      // - price: precio final de venta
+      // - basePrice: costo
+      // - marginPct: porcentaje en decimal (0.3 = 30%)
+      formData.append('price', String(roundedFinalPrice));
+      formData.append('basePrice', String(basePrice));
+      if (marginDecimal !== undefined) {
+        formData.append('marginPct', String(marginDecimal));
+      }
       formData.append('quantity', String(data.quantity));
       formData.append('minStock', String(data.minStock));
       formData.append('category', data.category);
@@ -288,8 +371,16 @@ export default function ProductForm({
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="name">Nombre del Producto</Label>
-                <Input id="name" {...register('name')} />
-                {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
+                <Input
+                  id="name"
+                  placeholder="Ej. Taladro percutor 1/2"
+                  {...register('name')}
+                />
+                {errors.name && (
+                  <p className="text-sm text-destructive mt-1">
+                    {errors.name.message}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -299,19 +390,28 @@ export default function ProductForm({
                     name="category"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <SelectTrigger id="category">
                           <SelectValue placeholder="Seleccione una categoría" />
                         </SelectTrigger>
                         <SelectContent>
-                          {categories.map(cat => (
-                            <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     )}
                   />
-                  {errors.category && <p className="text-sm text-destructive mt-1">{errors.category.message}</p>}
+                  {errors.category && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.category.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="location">Ubicación</Label>
@@ -319,22 +419,31 @@ export default function ProductForm({
                     name="location"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <SelectTrigger id="location">
                           <SelectValue placeholder="Seleccione una ubicación" />
                         </SelectTrigger>
                         <SelectContent>
-                          {locations.map(loc => (
-                            <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                          {locations.map((loc) => (
+                            <SelectItem key={loc.id} value={loc.id}>
+                              {loc.name}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     )}
                   />
-                  {errors.location && <p className="text-sm text-destructive mt-1">{errors.location.message}</p>}
+                  {errors.location && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.location.message}
+                    </p>
+                  )}
                 </div>
               </div>
-              
+
               <div>
                 <Label>Imagen del Producto</Label>
                 <div className="mt-2">
@@ -409,9 +518,14 @@ export default function ProductForm({
                       placeholder="https://ejemplo.com/imagen.jpg"
                       className="mt-1"
                     />
-                    {errors.imageUrl && <p className="text-sm text-destructive mt-1">{errors.imageUrl.message}</p>}
+                    {errors.imageUrl && (
+                      <p className="text-sm text-destructive mt-1">
+                        {errors.imageUrl.message}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1">
-                      Ingresa la URL completa de una imagen alojada en otro sitio web
+                      Ingresa la URL completa de una imagen alojada en otro
+                      sitio web
                     </p>
                   </div>
                 </div>
@@ -421,8 +535,17 @@ export default function ProductForm({
                 <div className="flex justify-between items-center mb-2">
                   <Label htmlFor="description">Descripción</Label>
                 </div>
-                <Textarea id="description" {...register('description')} rows={6}/>
-                {errors.description && <p className="text-sm text-destructive mt-1">{errors.description.message}</p>}
+                <Textarea
+                  id="description"
+                  {...register('description')}
+                  rows={6}
+                  placeholder="Describe el producto, sus características y usos principales"
+                />
+                {errors.description && (
+                  <p className="text-sm text-destructive mt-1">
+                    {errors.description.message}
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -434,20 +557,75 @@ export default function ProductForm({
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="price">Precio</Label>
-                <Input id="price" type="number" step="0.01" {...register('price')} />
-                {errors.price && <p className="text-sm text-destructive mt-1">{errors.price.message}</p>}
+                <Label htmlFor="basePrice">Precio base (costo)</Label>
+                <Input
+                  id="basePrice"
+                  type="number"
+                  step="0.01"
+                  placeholder="Ej. 20000"
+                  {...register('basePrice')}
+                />
+                {errors.basePrice && (
+                  <p className="text-sm text-destructive mt-1">
+                    {errors.basePrice.message}
+                  </p>
+                )}
               </div>
+
+              <div>
+                <Label htmlFor="profitPercent">Porcentaje de ganancia (%)</Label>
+                <Input
+                  id="profitPercent"
+                  type="number"
+                  step="0.01"
+                  value={profitPercentage}
+                  onChange={(e) => setProfitPercentage(e.target.value)}
+                  placeholder="Ej. 30 para 30%"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Fórmula: precio final = precio base / (1 - porcentaje/100).
+                </p>
+                {finalPricePreview !== null && (
+                  <p className="text-sm mt-1">
+                    Precio final estimado:{' '}
+                    <span className="font-semibold">
+                      $
+                      {finalPricePreview.toLocaleString('es-CO', {
+                        maximumFractionDigits: 0,
+                      })}
+                    </span>
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="quantity">Cantidad</Label>
-                  <Input id="quantity" type="number" {...register('quantity')} />
-                   {errors.quantity && <p className="text-sm text-destructive mt-1">{errors.quantity.message}</p>}
+                  <Input
+                    id="quantity"
+                    type="number"
+                    placeholder="Ej. 10"
+                    {...register('quantity')}
+                  />
+                  {errors.quantity && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.quantity.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="minStock">Stock Mín.</Label>
-                  <Input id="minStock" type="number" {...register('minStock')} />
-                  {errors.minStock && <p className="text-sm text-destructive mt-1">{errors.minStock.message}</p>}
+                  <Input
+                    id="minStock"
+                    type="number"
+                    placeholder="Ej. 2"
+                    {...register('minStock')}
+                  />
+                  {errors.minStock && (
+                    <p className="text-sm text-destructive mt-1">
+                      {errors.minStock.message}
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -455,11 +633,21 @@ export default function ProductForm({
         </div>
       </div>
       <div className="flex justify-end gap-2">
-         <Button type="button" variant="outline" onClick={() => router.push('/dashboard/products')}>Cancelar</Button>
-         <Button type="submit" disabled={isSubmitting}>
-           {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-           {product ? 'Guardar Cambios' : 'Crear Producto'}
-         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push('/dashboard/products')}
+        >
+          Cancelar
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="mr-2 h-4 w-4" />
+          )}
+          {product ? 'Guardar Cambios' : 'Crear Producto'}
+        </Button>
       </div>
     </form>
   );

@@ -16,6 +16,8 @@ const allNavLinks = [
   { href: '/dashboard/orders', label: 'Pedidos', icon: 'ShoppingCart', permission: 'orders', showBadge: true },
   { href: '/dashboard/sales', label: 'Ventas en Tienda', icon: 'DollarSign', permission: 'sales' },
   { href: '/dashboard/consultations', label: 'Asesorías', icon: 'Handshake', permission: 'consultations' },
+  { href: '/dashboard/almacen', label: 'Almacén', icon: 'Package', permission: 'warehouse' },
+  { href: '/dashboard/accounting', label: 'Contabilidad', icon: 'Calculator', permission: 'accounting' },
   { href: '/dashboard/users', label: 'Usuarios', icon: 'Users', permission: 'users' },
 ];
 

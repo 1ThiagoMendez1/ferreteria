@@ -27,6 +27,8 @@ async function main() {
     { name: 'orders' },
     { name: 'sales' },
     { name: 'consultations' },
+    { name: 'warehouse' },
+    { name: 'accounting' },
     { name: 'users' },
   ];
 
