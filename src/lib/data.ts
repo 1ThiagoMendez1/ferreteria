@@ -326,6 +326,16 @@ export async function getConsultations() {
 
 export async function addProduct(product: Omit<Product, 'id'>, userId?: string) {
   try {
+    // Validamos que el userId apunte a un usuario existente para no romper FKs
+    let creatorId: string | null = null;
+    if (userId) {
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+      creatorId = existingUser ? existingUser.id : null;
+    }
+
     const newProduct = await prisma.product.create({
       data: {
         name: product.name,
@@ -343,8 +353,9 @@ export async function addProduct(product: Omit<Product, 'id'>, userId?: string) 
         imageUrl: product.imageUrl,
         imageFile: product.imageFile,
         imageHint: product.imageHint || 'product',
-        createdById: userId || null,
-        updatedById: userId || null,
+        // Solo seteamos createdById/updatedById si el usuario existe, para evitar P2003
+        createdById: creatorId,
+        updatedById: creatorId,
       } as any,
       include: {
         category: true,
@@ -391,7 +402,16 @@ export async function updateProduct(id: string, productUpdate: Partial<Product>,
     if (productUpdate.imageUrl !== undefined) updateData.imageUrl = productUpdate.imageUrl;
     if (productUpdate.imageFile !== undefined) updateData.imageFile = productUpdate.imageFile;
     if (productUpdate.imageHint) updateData.imageHint = productUpdate.imageHint;
-    if (userId) updateData.updatedById = userId;
+
+    if (userId) {
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+      if (existingUser) {
+        updateData.updatedById = existingUser.id;
+      }
+    }
 
     const updatedProduct = await prisma.product.update({
       where: { id },

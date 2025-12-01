@@ -2,6 +2,7 @@
 import MainHeader from '@/components/main-header';
 import ProductCatalog from '@/components/product-catalog';
 import { getProducts, getCategories, getLocations } from '@/lib/data';
+import type { Product as ProductType } from '@/lib/types';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -31,26 +32,45 @@ export default async function Home() {
   };
 
   // Use fallback images for brand logos since we start with empty database
-  const brandLogos = [
+  type BrandLogo = { src: string; alt: string; hint: string };
+
+  const brandLogos: BrandLogo[] = [
     { src: "https://images.pexels.com/photos/162553/keys-workshop-mechanic-tools-162553.jpeg", alt: "Herramientas profesionales", hint: "professional tools" },
     { src: "https://images.pexels.com/photos/209235/pexels-photo-209235.jpeg", alt: "Materiales de construcción", hint: "building materials" },
     { src: "https://images.pexels.com/photos/569158/pexels-photo-569158.jpeg", alt: "Pintura y acabados", hint: "paint and finishes" },
     { src: "https://images.pexels.com/photos/39691/pexels-photo-39691.jpeg", alt: "Plomería profesional", hint: "professional plumbing" },
     { src: "https://images.pexels.com/photos/39693/pexels-photo-39693.jpeg", alt: "Electricidad residencial", hint: "residential electricity" },
-    { src: "https://images.pexels.com/photos/39694/pexels-photo-39694.jpeg", alt: "Herramientas eléctricas", hint: "power tools" }
+    { src: "https://images.pexels.com/photos/39694/pexels-photo-39694.jpeg", alt: "Herramientas eléctricas", hint: "power tools" },
   ];
 
-  // If we have products in the database, use some of them for brand logos
+  // If we have products in the database, use some of them for brand logos.
+  // Solo usamos productos que tengan una imageUrl no vacía para evitar src = "".
   if (products.length > 0) {
-    const productLogos = products.slice(0, 3).map(product => ({
-      src: product.imageUrl,
-      alt: product.name,
-      hint: product.imageHint
-    }));
-    // Replace first 3 fallback images with real product images
-    brandLogos.splice(0, 3, ...productLogos);
+    const productLogos: BrandLogo[] = products
+      .filter((product) => product.imageUrl && product.imageUrl.trim() !== '')
+      .slice(0, 3)
+      .map((product) => ({
+        src: product.imageUrl!, // no puede ser null/"" gracias al filter
+        alt: product.name,
+        hint: product.imageHint,
+      }));
+
+    if (productLogos.length > 0) {
+      brandLogos.splice(0, productLogos.length, ...productLogos);
+    }
   }
-  
+
+  const logosToRender = brandLogos;
+
+  // Normalizamos productos para que coincidan con el tipo ProductType
+  // (evitamos null en imageType/imageUrl/imageFile)
+  const normalizedProducts: ProductType[] = products.map((p: any) => ({
+    ...p,
+    imageType: p.imageType ?? undefined,
+    imageUrl: p.imageUrl ?? undefined,
+    imageFile: p.imageFile ?? undefined,
+  }));
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <MainHeader />
@@ -188,7 +208,7 @@ export default async function Home() {
         <div className="py-16 brushed-metal overflow-hidden">
            <div className="relative">
              <div className="flex animate-marquee-infinite">
-                {[...brandLogos, ...brandLogos].map((logo, index) => (
+                {[...logosToRender, ...logosToRender].map((logo, index) => (
                   <div key={index} className="mx-12 flex-shrink-0 flex items-center justify-center">
                     <Image
                       src={logo.src}
@@ -208,7 +228,7 @@ export default async function Home() {
         <section id="catalog" className="py-20 lg:py-28">
             <div className="container mx-auto px-4">
             <ProductCatalog
-              products={products}
+              products={normalizedProducts}
               categories={categories}
               locations={locations}
             />
