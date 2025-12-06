@@ -10,6 +10,9 @@ import {
 import { Package, AlertTriangle, CheckCircle } from 'lucide-react';
 import PageHeader from '@/components/page-header';
 
+// Forzamos esta página a ser dinámica para ver siempre datos actualizados en producción
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const products = await getProducts();
   const alerts = await getStockAlerts();

@@ -9,6 +9,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
+// Forzamos esta página a ser dinámica para que siempre muestre los pedidos/ventas actualizados en producción
+export const dynamic = 'force-dynamic';
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
