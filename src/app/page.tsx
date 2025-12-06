@@ -18,6 +18,9 @@ import {
 } from "@/components/ui/dialog"
 import ConsultationRequestForm from '@/components/consultation-request-form';
 
+// Forzamos la landing principal a ser dinámica para que siempre refleje cambios en productos/categorías/ubicaciones
+export const dynamic = 'force-dynamic';
+
 
 export default async function Home() {
   const products = await getProducts();
